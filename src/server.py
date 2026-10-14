@@ -261,6 +261,9 @@ def get_departures() -> tuple[int, dict]:
             _cache = payload
             _cache_time = time.monotonic()
             _cache_time_wall = datetime.now(UTC).isoformat()
+            print(
+                f"Golemio departures refreshed at {_cache_time_wall}", file=sys.stderr
+            )
             return 200, {"data": _cache, "updatedAt": _cache_time_wall, "stale": False}
         except (
             urllib.error.URLError,
@@ -283,6 +286,12 @@ def get_departures() -> tuple[int, dict]:
 
 
 _cache_time_wall = ""
+
+
+def refresh_departures_periodically(stop_event: threading.Event) -> None:
+    while not stop_event.is_set():
+        get_departures()
+        stop_event.wait(CACHE_SECONDS)
 
 
 class BoardHTTPServer(ThreadingHTTPServer):
@@ -359,6 +368,14 @@ def main() -> None:
         raise SystemExit("PORT must be an integer from 1 to 65535")
     server = BoardHTTPServer((host, port), BoardHandler)
     server.daemon_threads = True
+    refresh_stop = threading.Event()
+    refresh_thread = threading.Thread(
+        target=refresh_departures_periodically,
+        args=(refresh_stop,),
+        name="golemio-refresh",
+        daemon=True,
+    )
+    refresh_thread.start()
     print(f"Departure board listening on http://{host}:{port}")
     print("Find this phone's Wi-Fi IP address to open the board from another device.")
     try:
@@ -366,6 +383,7 @@ def main() -> None:
     except KeyboardInterrupt:
         print("\nStopping departure board.")
     finally:
+        refresh_stop.set()
         server.server_close()
 
 
