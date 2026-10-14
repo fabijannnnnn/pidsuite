@@ -13,7 +13,7 @@ import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import UTC, datetime
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import cast
@@ -260,6 +260,10 @@ def fetch_golemio() -> JSONPayload:
     opener = urllib.request.build_opener(
         NoRedirect, urllib.request.HTTPSHandler(context=ssl.create_default_context())
     )
+    request_started_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    print(
+        f"Golemio request started at {request_started_at}", file=sys.stderr, flush=True
+    )
     with opener.open(request, timeout=API_TIMEOUT_SECONDS) as response:
         content = response.read(MAX_RESPONSE_BYTES + 1)
         if len(content) > MAX_RESPONSE_BYTES:
@@ -291,9 +295,11 @@ def get_departures(force_refresh: bool = False) -> tuple[int, dict]:
             payload = fetch_golemio()
             _cache = payload
             _cache_time = time.monotonic()
-            _cache_time_wall = datetime.now(UTC).isoformat()
+            _cache_time_wall = datetime.now().astimezone().isoformat(timespec="seconds")
             print(
-                f"Golemio departures refreshed at {_cache_time_wall}", file=sys.stderr
+                f"Golemio departures refreshed at {_cache_time_wall}",
+                file=sys.stderr,
+                flush=True,
             )
             return 200, {"data": _cache, "updatedAt": _cache_time_wall, "stale": False}
         except (
