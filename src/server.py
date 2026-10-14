@@ -54,6 +54,30 @@ def load_local_env() -> None:
 load_local_env()
 
 
+def parse_clock_setting(name: str, default: str) -> int:
+    value = os.environ.get(name, default).strip()
+    try:
+        hour_text, minute_text = value.split(":", maxsplit=1)
+        hour, minute = int(hour_text), int(minute_text)
+    except ValueError as exc:
+        raise SystemExit(f"{name} must use HH:MM format") from exc
+    if not 0 <= hour <= 23 or not 0 <= minute <= 59:
+        raise SystemExit(f"{name} must be a valid 24-hour time")
+    return hour * 60 + minute
+
+
+FETCH_START_MINUTE = parse_clock_setting("FETCH_START", "06:00")
+FETCH_END_MINUTE = parse_clock_setting("FETCH_END", "18:00")
+if FETCH_START_MINUTE >= FETCH_END_MINUTE:
+    raise SystemExit("FETCH_START must be earlier than FETCH_END on the same day")
+
+
+def fetch_window_is_open() -> bool:
+    local_now = datetime.now().astimezone()
+    minute_of_day = local_now.hour * 60 + local_now.minute
+    return FETCH_START_MINUTE <= minute_of_day < FETCH_END_MINUTE
+
+
 def configured_identifiers() -> list[tuple[str, str]]:
     stop_start = os.environ.get("STOP_START", "").strip()
     if stop_start:
@@ -249,6 +273,13 @@ def fetch_golemio() -> JSONPayload:
 def get_departures(force_refresh: bool = False) -> tuple[int, dict]:
     global _cache, _cache_time, _cache_time_wall
     with cache_lock:
+        if not fetch_window_is_open():
+            return 200, {
+                "data": _cache if _cache is not None else [],
+                "updatedAt": _cache_time_wall or None,
+                "stale": _cache is not None,
+                "paused": True,
+            }
         now = time.monotonic()
         if (
             not force_refresh

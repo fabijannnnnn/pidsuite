@@ -6,6 +6,7 @@ const message = document.getElementById("message");
 let lastDepartures = [];
 let lastUpdatedAt = null;
 let lastWasStale = false;
+let lastPaused = false;
 
 function valueAt(object, path) {
   return path
@@ -133,7 +134,14 @@ function render() {
   }
 
   list.setAttribute("aria-busy", "false");
-  if (lastUpdatedAt) {
+  if (lastPaused) {
+    if (lastUpdatedAt) {
+      const date = new Date(lastUpdatedAt);
+      updated.textContent = `Outside scheduled hours · last updated ${Number.isFinite(date.getTime()) ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "recently"}`;
+    } else {
+      updated.textContent = "Outside scheduled hours";
+    }
+  } else if (lastUpdatedAt) {
     const date = new Date(lastUpdatedAt);
     updated.textContent = `Updated ${Number.isFinite(date.getTime()) ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "recently"}${lastWasStale ? " · showing saved data" : ""}`;
   }
@@ -151,9 +159,12 @@ async function refresh() {
     lastDepartures = unwrapDepartures(payload.data);
     lastUpdatedAt = payload.updatedAt;
     lastWasStale = Boolean(payload.stale);
-    message.textContent = lastWasStale
-      ? "Golemio is temporarily unavailable; showing the last successful update."
-      : "";
+    lastPaused = Boolean(payload.paused);
+    message.textContent = lastPaused
+      ? "Outside scheduled hours; API refreshes will resume when the window opens."
+      : lastWasStale
+        ? "Golemio is temporarily unavailable; showing the last successful update."
+        : "";
     render();
   } catch (error) {
     message.textContent =
