@@ -6,15 +6,15 @@ A small Python standard-library web server and browser display. The server makes
 
 Python 3 is required; no third-party Python packages are used.
 
-1. Copy `.env.example` to `.env`.
-2. Edit `.env` and set `GOLEMIO_API_TOKEN`, `STOP_START`, and optionally `STOP_DESTINATION`.
+1. Copy `src/.env.example` to `src/.env`.
+2. Edit `src/.env` and set `GOLEMIO_API_TOKEN`, `STOP_START`, and optionally `STOP_DESTINATION`.
    - `STOP_START` is one GTFS stop ID; it selects the departure board returned by Golemio.
    - `STOP_DESTINATION` is optional text matched against the departure destination/headsign. For example, `STOP_DESTINATION=Belárie`. Matching ignores case and Czech accents and checks for the text within the headsign.
    - Optionally set `TRAM_NUMBERS=3,17` to show only departures whose displayed route short name exactly matches one of those values. Leave it empty to show all routes. This is a number filter, not a transport-mode check, so a bus or other route with the same displayed number could also match if returned for that stop.
    - When `STOP_DESTINATION` and `TRAM_NUMBERS` are both set, a departure must match both. `STOP_START` is not a journey-planner origin/destination pair: it asks Golemio for departures at that one stop, and the destination filter uses the departure headsign text.
 3. Restrict access to the token file:
    ```sh
-   chmod 600 .env
+   chmod 600 src/.env
    ```
 
 Do not put the token into the HTML page, JavaScript, a URL, or a shared source repository. `.env` is excluded by `.gitignore`.
@@ -24,7 +24,7 @@ Do not put the token into the HTML page, JavaScript, a URL, or a shared source r
 From this directory:
 
 ```sh
-python3 server.py
+python3 src/server.py
 ```
 
 Open `http://127.0.0.1:8000` on the host. Other devices on the same Wi-Fi can use `http://<host-LAN-IP>:8000`. Find the host's local IP in its network settings. Stop the server with Ctrl+C.
@@ -33,8 +33,8 @@ Open `http://127.0.0.1:8000` on the host. Other devices on the same Wi-Fi can us
 
 1. Install Termux from a trusted source (the F-Droid or Termux GitHub distribution; do not mix Termux and add-on sources).
 2. In Termux, install Python with `pkg update && pkg install python`.
-3. Put this project in Termux's private home directory, not a publicly shared folder. Create/edit `.env` there and run `chmod 600 .env`.
-4. Start it from the project directory with `python server.py`.
+3. Put this project in Termux's private home directory (for example, `~/pidsuite`), not a publicly shared folder. Create/edit `src/.env` there and run `chmod 600 src/.env`.
+4. From `~/pidsuite/src`, start it with `python server.py` (or from `~/pidsuite` with `python src/server.py`).
 5. Find the phone's Wi-Fi IP in Android network settings and open `http://<phone-LAN-IP>:8000` on another device connected to the same network.
 6. Keep Termux in the foreground or configure Android battery settings to allow it to run. Android may stop background processes to save power; this affects availability.
 
