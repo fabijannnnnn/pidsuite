@@ -246,15 +246,15 @@ def fetch_golemio() -> JSONPayload:
     return cast(JSONPayload, payload)
 
 
-def get_departures() -> tuple[int, dict]:
+def get_departures(force_refresh: bool = False) -> tuple[int, dict]:
     global _cache, _cache_time, _cache_time_wall
-    now = time.monotonic()
-    if _cache is not None and now - _cache_time < CACHE_SECONDS:
-        return 200, {"data": _cache, "updatedAt": _cache_time_wall, "stale": False}
-
     with cache_lock:
         now = time.monotonic()
-        if _cache is not None and now - _cache_time < CACHE_SECONDS:
+        if (
+            not force_refresh
+            and _cache is not None
+            and now - _cache_time < CACHE_SECONDS
+        ):
             return 200, {"data": _cache, "updatedAt": _cache_time_wall, "stale": False}
         try:
             payload = fetch_golemio()
@@ -289,9 +289,12 @@ _cache_time_wall = ""
 
 
 def refresh_departures_periodically(stop_event: threading.Event) -> None:
+    get_departures(force_refresh=True)
     while not stop_event.is_set():
-        get_departures()
-        stop_event.wait(CACHE_SECONDS)
+        seconds_to_next_minute = 60 - (time.time() % 60)
+        if stop_event.wait(seconds_to_next_minute):
+            break
+        get_departures(force_refresh=True)
 
 
 class BoardHTTPServer(ThreadingHTTPServer):
