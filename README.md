@@ -42,7 +42,7 @@ If port 8000 is occupied, set another `PORT` in `.env` and use that port in the 
 
 ## Behavior and security
 
-- The server refreshes Golemio independently every 60 seconds, even if no browser page is open. The page also polls the local server every 60 seconds; successful upstream responses are cached so multiple display devices share the same update. Successful refresh timestamps are printed in the server terminal.
+- The server refreshes Golemio at each wall-clock minute boundary, even if no browser page is open. The page polls just after the boundary to display the fresh cache; it also refreshes immediately when made visible again. Successful refresh timestamps are printed in the server terminal.
 - Requests go only to the hard-coded Golemio HTTPS endpoint. Redirects are not followed, to avoid forwarding the token elsewhere.
 - The API request times out after 12 seconds. If a refresh fails, the last successful result is served as stale data; before the first success, the local API returns an error without exposing upstream details.
 - Only the local read-only board and health-check paths are served. No arbitrary upstream URL or browser-supplied API query is accepted.
