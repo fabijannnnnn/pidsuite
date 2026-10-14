@@ -118,6 +118,7 @@ function render() {
 
     const time = document.createElement("span");
     time.className = "time";
+    time.dataset.departureTime = date.toISOString();
     const minutes = Math.ceil((date.getTime() - now) / 60000);
     const relative = document.createElement("strong");
     relative.textContent = minutes <= 0 ? "now" : `${minutes} min`;
@@ -171,6 +172,19 @@ async function refresh() {
   }
 }
 
+function updateCountdowns() {
+  const now = Date.now();
+  for (const time of list.querySelectorAll(".time[data-departure-time]")) {
+    const departureAt = Date.parse(time.dataset.departureTime || "");
+    const relative = time.querySelector("strong");
+    if (!Number.isFinite(departureAt) || !relative) continue;
+
+    const minutes = Math.ceil((departureAt - now) / 60000);
+    const label = minutes <= 0 ? "now" : `${minutes} min`;
+    if (relative.textContent !== label) relative.textContent = label;
+  }
+}
+
 function scheduleMinuteRefresh() {
   const nextMinute = 60_000 - (Date.now() % 60_000) + 2_000;
   window.setTimeout(async () => {
@@ -184,4 +198,4 @@ scheduleMinuteRefresh();
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") refresh();
 });
-window.setInterval(render, 15_000);
+window.setInterval(updateCountdowns, 15_000);
