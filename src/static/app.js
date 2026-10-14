@@ -60,16 +60,20 @@ function getDepartureTime(item) {
 function render() {
   list.replaceChildren();
   const now = Date.now();
-  const departures = lastDepartures
+  const timedDepartures = lastDepartures
     .map((item) => ({ item, date: getDepartureTime(item) }))
-    .filter((entry) => entry.date && Number.isFinite(entry.date.getTime()))
+    .filter((entry) => entry.date && Number.isFinite(entry.date.getTime()));
+  const departures = timedDepartures
+    .filter((entry) => entry.date.getTime() > now)
     .sort((a, b) => a.date - b.date);
 
   if (!departures.length) {
     const empty = document.createElement("li");
     empty.className = "empty";
     empty.textContent = lastDepartures.length
-      ? "Departure times were not available in the response."
+      ? timedDepartures.length
+        ? "No upcoming departures right now."
+        : "Departure times were not available in the response."
       : "No upcoming departures were returned.";
     list.append(empty);
   }
@@ -120,9 +124,10 @@ function render() {
     const time = document.createElement("span");
     time.className = "time";
     time.dataset.departureTime = date.toISOString();
-    const minutes = Math.ceil((date.getTime() - now) / 60000);
+    const remainingMs = date.getTime() - now;
     const relative = document.createElement("strong");
-    relative.textContent = minutes <= 0 ? "now" : `${minutes} min`;
+    relative.textContent =
+      remainingMs <= 30_000 ? "now" : `${Math.ceil(remainingMs / 60000)} min`;
     const exact = document.createElement("span");
     exact.textContent = new Intl.DateTimeFormat(undefined, {
       hour: "2-digit",
@@ -190,9 +195,22 @@ function updateCountdowns() {
     const relative = time.querySelector("strong");
     if (!Number.isFinite(departureAt) || !relative) continue;
 
-    const minutes = Math.ceil((departureAt - now) / 60000);
-    const label = minutes <= 0 ? "now" : `${minutes} min`;
+    const remainingMs = departureAt - now;
+    if (remainingMs <= 0) {
+      time.closest(".departure")?.remove();
+      continue;
+    }
+
+    const label =
+      remainingMs <= 30_000 ? "now" : `${Math.ceil(remainingMs / 60000)} min`;
     if (relative.textContent !== label) relative.textContent = label;
+  }
+
+  if (!list.querySelector(".departure") && !list.querySelector(".empty")) {
+    const empty = document.createElement("li");
+    empty.className = "empty";
+    empty.textContent = "No upcoming departures right now.";
+    list.append(empty);
   }
 }
 
@@ -209,4 +227,4 @@ scheduleMinuteRefresh();
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") refresh();
 });
-window.setInterval(updateCountdowns, 15_000);
+window.setInterval(updateCountdowns, 1_000);

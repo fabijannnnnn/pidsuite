@@ -21,7 +21,6 @@ from typing import cast
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 API_URL = "https://api.golemio.cz/v2/pid/departureboards"
-CACHE_SECONDS = 60
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 API_TIMEOUT_SECONDS = 12
 
@@ -70,6 +69,13 @@ FETCH_START_MINUTE = parse_clock_setting("FETCH_START", "06:00")
 FETCH_END_MINUTE = parse_clock_setting("FETCH_END", "18:00")
 if FETCH_START_MINUTE >= FETCH_END_MINUTE:
     raise SystemExit("FETCH_START must be earlier than FETCH_END on the same day")
+try:
+    FETCH_INTERVAL_MINUTES = int(os.environ.get("FETCH_INTERVAL_MINUTES", "5"))
+except ValueError as exc:
+    raise SystemExit("FETCH_INTERVAL_MINUTES must be an integer from 1 to 60") from exc
+if not 1 <= FETCH_INTERVAL_MINUTES <= 60:
+    raise SystemExit("FETCH_INTERVAL_MINUTES must be an integer from 1 to 60")
+FETCH_INTERVAL_SECONDS = FETCH_INTERVAL_MINUTES * 60
 
 
 def fetch_window_is_open() -> bool:
@@ -234,6 +240,27 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def count_departures(payload: JSONPayload) -> int | None:
+    if isinstance(payload, list):
+        return len(payload)
+    departures = payload.get("departures")
+    if isinstance(departures, list):
+        return len(departures)
+    features = payload.get("features")
+    if isinstance(features, list):
+        total = 0
+        for feature in features:
+            if not isinstance(feature, dict):
+                continue
+            properties = feature.get("properties", feature)
+            if isinstance(properties, dict) and isinstance(
+                properties.get("departures"), list
+            ):
+                total += len(properties["departures"])
+        return total
+    return None
+
+
 def fetch_golemio() -> JSONPayload:
     token = os.environ.get("GOLEMIO_API_TOKEN", "").strip()
     if not token:
@@ -271,11 +298,21 @@ def fetch_golemio() -> JSONPayload:
         payload = json.loads(content.decode("utf-8"))
     if not isinstance(payload, (list, dict)):
         raise InvalidGolemioResponse("Unexpected Golemio response")
-    return cast(JSONPayload, payload)
+    typed_payload = cast(JSONPayload, payload)
+    count = count_departures(typed_payload)
+    count_text = (
+        f"{count} departures" if count is not None else "departure count unavailable"
+    )
+    print(
+        f"Golemio response received: {len(content)} bytes; {count_text}",
+        file=sys.stderr,
+        flush=True,
+    )
+    return typed_payload
 
 
 def get_departures(force_refresh: bool = False) -> tuple[int, dict]:
-    global _cache, _cache_time, _cache_time_wall
+    global _cache, _cache_time, _cache_time_wall, _last_refresh_failed
     with cache_lock:
         if not fetch_window_is_open():
             return 200, {
@@ -284,18 +321,22 @@ def get_departures(force_refresh: bool = False) -> tuple[int, dict]:
                 "stale": _cache is not None,
                 "paused": True,
             }
-        now = time.monotonic()
-        if (
-            not force_refresh
-            and _cache is not None
-            and now - _cache_time < CACHE_SECONDS
-        ):
-            return 200, {"data": _cache, "updatedAt": _cache_time_wall, "stale": False}
+        if not force_refresh:
+            if _cache is None:
+                return 503, {"error": "Departure data is not available yet."}
+            cache_age = time.monotonic() - _cache_time
+            is_stale = _last_refresh_failed or cache_age > FETCH_INTERVAL_SECONDS * 1.5
+            return 200, {
+                "data": _cache,
+                "updatedAt": _cache_time_wall,
+                "stale": is_stale,
+            }
         try:
             payload = fetch_golemio()
             _cache = payload
             _cache_time = time.monotonic()
             _cache_time_wall = datetime.now().astimezone().isoformat(timespec="seconds")
+            _last_refresh_failed = False
             print(
                 f"Golemio departures refreshed at {_cache_time_wall}",
                 file=sys.stderr,
@@ -309,6 +350,7 @@ def get_departures(force_refresh: bool = False) -> tuple[int, dict]:
             ValueError,
             InvalidGolemioResponse,
         ) as exc:
+            _last_refresh_failed = True
             # Do not send upstream errors, URLs, or configuration values to clients.
             print(f"Golemio refresh failed ({type(exc).__name__})", file=sys.stderr)
             if _cache is not None:
@@ -323,13 +365,16 @@ def get_departures(force_refresh: bool = False) -> tuple[int, dict]:
 
 
 _cache_time_wall = ""
+_last_refresh_failed = False
 
 
 def refresh_departures_periodically(stop_event: threading.Event) -> None:
     get_departures(force_refresh=True)
     while not stop_event.is_set():
-        seconds_to_next_minute = 60 - (time.time() % 60)
-        if stop_event.wait(seconds_to_next_minute):
+        seconds_to_next_interval = FETCH_INTERVAL_SECONDS - (
+            time.time() % FETCH_INTERVAL_SECONDS
+        )
+        if stop_event.wait(seconds_to_next_interval):
             break
         get_departures(force_refresh=True)
 
