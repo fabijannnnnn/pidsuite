@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Departures</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <main class="board" aria-labelledby="board-title">
+    <header class="board-header">
+      <p class="eyebrow">Palackého Náměstí</p>
+      <h1 id="board-title">Departures</h1>
+      <p id="updated" class="updated" aria-live="polite">Connecting to the local board…</p>
+    </header>
+    <section class="departures-wrap" aria-label="Upcoming departures">
+      <ol id="departures" class="departures" aria-live="polite" aria-busy="true"></ol>
+    </section>
+    <p id="message" class="message" role="status"></p>
+    <footer>Departure information by Golemio · refreshes every minute</footer>
+  </main>
+</body>
+</html>
